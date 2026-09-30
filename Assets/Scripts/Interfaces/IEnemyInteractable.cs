@@ -4,6 +4,7 @@ public interface IEnemyInteractable
 {
     bool IsTargetValid { get; }
     bool CanAcceptEnemy { get; }
+    Transform InteractionPoint { get; }
 
     bool TryJoinQueue(EnemyAgent enemy);
     void LeaveQueue(EnemyAgent enemy);

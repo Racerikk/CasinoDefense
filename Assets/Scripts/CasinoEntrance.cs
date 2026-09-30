@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -5,11 +6,16 @@ using UnityEditor;
 
 public class CasinoEntrance : MonoBehaviour
 {
+    public static readonly List<CasinoEntrance> AllEntrances = new();
+
     [Header("Spawner Setup")]
     [SerializeField] private GameObject enemyPrefab;
     [SerializeField] private Transform spawnPoint;
 
     public Transform SpawnPoint => spawnPoint != null ? spawnPoint : transform;
+
+    private void OnEnable() => AllEntrances.Add(this);
+    private void OnDisable() => AllEntrances.Remove(this);
 
     public void SpawnEnemy()
     {
@@ -19,10 +25,7 @@ public class CasinoEntrance : MonoBehaviour
             return;
         }
 
-        Vector3 spawnPos = SpawnPoint.position;
-        Quaternion spawnRot = SpawnPoint.rotation;
-
-        GameObject spawned = Instantiate(enemyPrefab, spawnPos, spawnRot);
+        GameObject spawned = Instantiate(enemyPrefab, SpawnPoint.position, SpawnPoint.rotation);
 
         if (spawned.TryGetComponent<EnemyAgent>(out var agent))
         {
@@ -48,20 +51,13 @@ public class CasinoEntranceEditor : Editor
         DrawDefaultInspector();
 
         CasinoEntrance entrance = (CasinoEntrance)target;
-
         EditorGUILayout.Space(12);
         GUI.backgroundColor = new Color(0.2f, 0.8f, 0.4f);
 
         if (GUILayout.Button("Spawn Enemy", GUILayout.Height(32)))
         {
-            if (Application.isPlaying)
-            {
-                entrance.SpawnEnemy();
-            }
-            else
-            {
-                Debug.LogWarning("You must be in Play Mode to spawn NavMesh agents.");
-            }
+            if (Application.isPlaying) entrance.SpawnEnemy();
+            else Debug.LogWarning("Must be in Play Mode to spawn NavMesh agents.");
         }
 
         GUI.backgroundColor = Color.white;

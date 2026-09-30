@@ -23,6 +23,7 @@ public class TestMachine : MonoBehaviour, IEnemyInteractable
     private EnemyAgent currentOccupant;
     private NavMeshObstacle obstacle;
 
+    public Transform InteractionPoint => interactionPoint;
     public bool IsTargetValid => machineBankroll > 0 && gameObject.activeInHierarchy;
     public bool CanAcceptEnemy => IsTargetValid && (currentOccupant == null || waitingQueue.Count < maxWaitQueue);
 

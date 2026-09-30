@@ -5,6 +5,8 @@ public static class TargetRegistry
 {
     private static readonly List<IEnemyInteractable> targets = new();
 
+    public static IReadOnlyList<IEnemyInteractable> AllTargets => targets;
+
     public static void Register(IEnemyInteractable target)
     {
         if (!targets.Contains(target)) targets.Add(target);
@@ -23,7 +25,6 @@ public static class TargetRegistry
         for (int i = targets.Count - 1; i >= 0; i--)
         {
             var target = targets[i];
-
             if (target == null || !target.IsTargetValid)
             {
                 targets.RemoveAt(i);
@@ -56,10 +57,7 @@ public static class TargetRegistry
                 continue;
             }
 
-            if (target.CanAcceptEnemy)
-            {
-                available.Add(target);
-            }
+            if (target.CanAcceptEnemy) available.Add(target);
         }
 
         if (available.Count == 0) return null;
