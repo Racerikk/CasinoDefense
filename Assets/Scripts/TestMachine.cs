@@ -6,25 +6,29 @@ using UnityEngine.AI;
 public class TestMachine : MonoBehaviour, IEnemyInteractable
 {
     [Header("Interaction & Queue Setup")]
-    [Tooltip("The spot where the active player stands while spinning.")]
+    [Tooltip("The spot in front of the machine where the active player stands.")]
     [SerializeField] private Transform interactionPoint;
 
-    [Tooltip("Distance between enemies waiting in line behind the interaction point.")]
+    [Tooltip("Distance between enemies waiting in line.")]
     [SerializeField] private float queueSpacing = 1.0f;
 
-    [Tooltip("Optional: Specific transforms for the waiting line. If left empty, positions calculate automatically.")]
+    [Tooltip("Flips the queue line 180 degrees if your interaction point or model faces the opposite way.")]
+    [SerializeField] private bool invertQueueDirection = false;
+
+    [Tooltip("Optional: Specific transforms for the waiting line. If empty, calculates automatically.")]
     [SerializeField] private Transform[] customQueuePoints;
 
     [Header("Stats")]
     [SerializeField] private int machineBankroll = 100;
-    [SerializeField] private int maxWaitQueue = 2; // Up to 2 waiting + 1 active
+    [SerializeField] private int maxWaitQueue = 2;
 
     private readonly List<EnemyAgent> waitingQueue = new();
     private EnemyAgent currentOccupant;
     private NavMeshObstacle obstacle;
+    private bool isPreview = false;
 
-    public Transform InteractionPoint => interactionPoint;
-    public bool IsTargetValid => machineBankroll > 0 && gameObject.activeInHierarchy;
+    public Transform InteractionPoint => interactionPoint != null ? interactionPoint : transform;
+    public bool IsTargetValid => !isPreview && machineBankroll > 0 && gameObject.activeInHierarchy;
     public bool CanAcceptEnemy => IsTargetValid && (currentOccupant == null || waitingQueue.Count < maxWaitQueue);
 
     private void Awake()
@@ -34,11 +38,58 @@ public class TestMachine : MonoBehaviour, IEnemyInteractable
         obstacle.carveOnlyStationary = true;
     }
 
-    private void OnEnable() => TargetRegistry.Register(this);
+    private void OnEnable()
+    {
+        if (!isPreview)
+        {
+            TargetRegistry.Register(this);
+        }
+    }
+
     private void OnDisable()
     {
         TargetRegistry.Unregister(this);
         DismissAllQueue();
+    }
+
+    public void ConfigureAsPreview()
+    {
+        isPreview = true;
+        TargetRegistry.Unregister(this);
+
+        if (obstacle != null)
+        {
+            obstacle.enabled = false;
+        }
+    }
+
+    public List<Vector3> GetAllStandPositions()
+    {
+        List<Vector3> positions = new(maxWaitQueue + 1);
+        Transform basePoint = InteractionPoint;
+
+        // Default: extends backward from the interaction point's forward arrow (-basePoint.forward)
+        Vector3 queueDir = invertQueueDirection ? basePoint.forward : -basePoint.forward;
+        queueDir.y = 0f;
+        queueDir.Normalize();
+
+        // 0: Active player spot
+        positions.Add(basePoint.position);
+
+        // 1..N: Waiting queue spots
+        for (int i = 0; i < maxWaitQueue; i++)
+        {
+            if (customQueuePoints != null && i < customQueuePoints.Length && customQueuePoints[i] != null)
+            {
+                positions.Add(customQueuePoints[i].position);
+            }
+            else
+            {
+                positions.Add(basePoint.position + (queueDir * ((i + 1) * queueSpacing)));
+            }
+        }
+
+        return positions;
     }
 
     public bool TryJoinQueue(EnemyAgent enemy)
@@ -64,7 +115,6 @@ public class TestMachine : MonoBehaviour, IEnemyInteractable
     {
         if (currentOccupant == enemy)
         {
-            // Advance the line: next in queue takes the machine
             if (waitingQueue.Count > 0)
             {
                 currentOccupant = waitingQueue[0];
@@ -85,28 +135,20 @@ public class TestMachine : MonoBehaviour, IEnemyInteractable
 
     public Vector3 GetAssignedPosition(EnemyAgent enemy)
     {
-        Transform basePoint = interactionPoint != null ? interactionPoint : transform;
+        List<Vector3> allSpots = GetAllStandPositions();
 
-        // Active occupant stands directly at the interaction point
-        if (currentOccupant == enemy)
+        if (currentOccupant == enemy || enemy == null)
         {
-            return basePoint.position;
+            return allSpots[0];
         }
 
         int queueIndex = waitingQueue.IndexOf(enemy);
-        if (queueIndex >= 0)
+        if (queueIndex >= 0 && (queueIndex + 1) < allSpots.Count)
         {
-            // Use custom markers if assigned
-            if (customQueuePoints != null && queueIndex < customQueuePoints.Length && customQueuePoints[queueIndex] != null)
-            {
-                return customQueuePoints[queueIndex].position;
-            }
-
-            // Fallback: Line up backward along the interaction point's forward vector
-            return basePoint.position - (basePoint.forward * ((queueIndex + 1) * queueSpacing));
+            return allSpots[queueIndex + 1];
         }
 
-        return basePoint.position;
+        return allSpots[0];
     }
 
     public void OnInteract(EnemyAgent enemy)
@@ -114,11 +156,13 @@ public class TestMachine : MonoBehaviour, IEnemyInteractable
         if (!IsCurrentTurn(enemy)) return;
 
         machineBankroll -= 10;
-        Debug.Log($"[{name}] Pulled by {enemy.name}! Credits left: {machineBankroll}");
+        if (CurrencyManager.Instance != null)
+        {
+            CurrencyManager.Instance.AddCurrency(10);
+        }
 
         if (machineBankroll <= 0)
         {
-            Debug.Log($"[{name}] Out of cash! Disbanding queue.");
             TargetRegistry.Unregister(this);
             DismissAllQueue();
         }
@@ -132,27 +176,15 @@ public class TestMachine : MonoBehaviour, IEnemyInteractable
 
     private void OnDrawGizmosSelected()
     {
-        Transform basePoint = interactionPoint != null ? interactionPoint : transform;
-
-        // Front interaction point
-        Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(basePoint.position, 0.3f);
-
-        // Queue spots
-        Gizmos.color = Color.yellow;
-        for (int i = 0; i < maxWaitQueue; i++)
+        List<Vector3> spots = GetAllStandPositions();
+        for (int i = 0; i < spots.Count; i++)
         {
-            Vector3 pos;
-            if (customQueuePoints != null && i < customQueuePoints.Length && customQueuePoints[i] != null)
+            Gizmos.color = i == 0 ? Color.green : Color.yellow;
+            Gizmos.DrawWireSphere(spots[i], 0.3f);
+            if (i > 0)
             {
-                pos = customQueuePoints[i].position;
+                Gizmos.DrawLine(spots[i - 1], spots[i]);
             }
-            else
-            {
-                pos = basePoint.position - (basePoint.forward * ((i + 1) * queueSpacing));
-            }
-
-            Gizmos.DrawWireSphere(pos, 0.25f);
         }
     }
 }

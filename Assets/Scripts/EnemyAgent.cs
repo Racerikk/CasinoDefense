@@ -4,6 +4,7 @@ using UnityEngine.AI;
 [RequireComponent(typeof(NavMeshAgent))]
 public class EnemyAgent : MonoBehaviour
 {
+    public static readonly System.Collections.Generic.HashSet<EnemyAgent> ActiveEnemies = new();
     private enum EnemyState
     {
         SeekingMachine,
@@ -61,6 +62,16 @@ public class EnemyAgent : MonoBehaviour
             InitializeGoals();
             AcquireTarget();
         }
+    }
+    private void OnEnable()
+    {
+        ActiveEnemies.Add(this);
+    }
+
+    private void OnDisable()
+    {
+        ActiveEnemies.Remove(this);
+        LeaveCurrentMachine();
     }
 
     public void InitializeEntrance(CasinoEntrance entrance)
@@ -195,7 +206,15 @@ public class EnemyAgent : MonoBehaviour
             }
         }
     }
+    public void ApplyWaveScaling(float speedMultiplier, int extraPlays)
+    {
+        if (agent != null)
+        {
+            agent.speed *= speedMultiplier;
+        }
 
+        targetPlays += extraPlays;
+    }
     private void HandleExitLifecycle()
     {
         float flatDistToExit = FlatDistance(transform.position, resolvedExitDestination);
@@ -273,7 +292,5 @@ public class EnemyAgent : MonoBehaviour
         float dz = a.z - b.z;
         return Mathf.Sqrt(dx * dx + dz * dz);
     }
-
-    private void OnDisable() => LeaveCurrentMachine();
     private void OnDestroy() => LeaveCurrentMachine();
 }

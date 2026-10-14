@@ -8,8 +8,8 @@ public class CasinoEntrance : MonoBehaviour
 {
     public static readonly List<CasinoEntrance> AllEntrances = new();
 
-    [Header("Spawner Setup")]
-    [SerializeField] private GameObject enemyPrefab;
+    [Header("Default Spawner Setup")]
+    [SerializeField] private GameObject defaultEnemyPrefab;
     [SerializeField] private Transform spawnPoint;
 
     public Transform SpawnPoint => spawnPoint != null ? spawnPoint : transform;
@@ -17,20 +17,30 @@ public class CasinoEntrance : MonoBehaviour
     private void OnEnable() => AllEntrances.Add(this);
     private void OnDisable() => AllEntrances.Remove(this);
 
-    public void SpawnEnemy()
+    // Used by the Editor test button
+    public EnemyAgent SpawnEnemy()
     {
-        if (enemyPrefab == null)
+        return SpawnEnemy(defaultEnemyPrefab);
+    }
+
+    // Used by WaveManager to spawn specific enemy types
+    public EnemyAgent SpawnEnemy(GameObject prefabToSpawn)
+    {
+        if (prefabToSpawn == null)
         {
             Debug.LogWarning($"[{name}] No enemy prefab assigned!", this);
-            return;
+            return null;
         }
 
-        GameObject spawned = Instantiate(enemyPrefab, SpawnPoint.position, SpawnPoint.rotation);
+        GameObject spawned = Instantiate(prefabToSpawn, SpawnPoint.position, SpawnPoint.rotation);
 
         if (spawned.TryGetComponent<EnemyAgent>(out var agent))
         {
             agent.InitializeEntrance(this);
+            return agent;
         }
+
+        return null;
     }
 
     private void OnDrawGizmos()
@@ -54,7 +64,7 @@ public class CasinoEntranceEditor : Editor
         EditorGUILayout.Space(12);
         GUI.backgroundColor = new Color(0.2f, 0.8f, 0.4f);
 
-        if (GUILayout.Button("Spawn Enemy", GUILayout.Height(32)))
+        if (GUILayout.Button("Spawn Test Enemy", GUILayout.Height(32)))
         {
             if (Application.isPlaying) entrance.SpawnEnemy();
             else Debug.LogWarning("Must be in Play Mode to spawn NavMesh agents.");
